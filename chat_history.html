@@ -312,6 +312,14 @@
             width: 80px !important;
             font-size: 12px;
         }
+        .theme-toggle.api-key {
+            width: 110px !important;
+            font-size: 12px;
+        }
+        .theme-toggle.api-key.active {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
         .theme-toggle:hover { background: var(--hover-bg); border-color: var(--primary); }
 
         /* ==================== 加载动画 ==================== */
@@ -366,6 +374,9 @@
             <button class="theme-toggle clear" onclick="clearChat()" title="清空对话">
                 🗑️ 清空
             </button>
+            <button class="theme-toggle api-key" id="apiKeyBtn" onclick="configureApiKey()" title="设置或清除 API 密钥">
+                🔑 设置密钥
+            </button>
             <button class="theme-toggle home" onclick="window.location.href='/'" title="返回首页">
                 <span>🏠&nbsp;返回首页</span>
             </button>
@@ -395,6 +406,66 @@
         let isLoading = false;
         let currentAIBubble = null;
         let abortController = null;
+        const API_KEY_STORAGE_KEY = 'Business Gemini_api_key';
+
+        function getStoredApiKey() {
+            return localStorage.getItem(API_KEY_STORAGE_KEY) || '';
+        }
+
+        function updateApiKeyButton() {
+            const btn = document.getElementById('apiKeyBtn');
+            if (!btn) return;
+            const hasKey = Boolean(getStoredApiKey());
+            btn.textContent = hasKey ? '🔑 已设置' : '🔑 设置密钥';
+            btn.classList.toggle('active', hasKey);
+        }
+
+        function configureApiKey() {
+            const current = getStoredApiKey();
+            const input = prompt('请输入 API 密钥（留空将清除）', current);
+            if (input === null) {
+                return;
+            }
+            const trimmed = input.trim();
+            if (trimmed) {
+                localStorage.setItem(API_KEY_STORAGE_KEY, trimmed);
+                alert('API 密钥已保存');
+            } else {
+                localStorage.removeItem(API_KEY_STORAGE_KEY);
+                alert('已清除 API 密钥');
+            }
+            updateApiKeyButton();
+        }
+
+        function buildRequestHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            const apiKey = getStoredApiKey();
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+            return headers;
+        }
+
+        async function handleErrorResponse(response) {
+            let message = `请求失败 (HTTP ${response.status})`;
+            try {
+                const raw = await response.text();
+                if (raw) {
+                    try {
+                        const data = JSON.parse(raw);
+                        message = data.message || data.error || raw;
+                    } catch (_) {
+                        message = raw;
+                    }
+                }
+            } catch (_) {
+                // 忽略
+            }
+            if (response.status === 401) {
+                message = 'API 鉴权失败，请点击右上角 🔑 按钮设置正确的 API 密钥。';
+            }
+            throw new Error(message);
+        }
 
         // ==================== 初始化 ====================
         window.onload = () => {
@@ -405,6 +476,7 @@
             } else {
                 renderChatHistory();
             }
+            updateApiKeyButton();
         };
 
         // ==================== 主题切换 ====================
@@ -477,9 +549,7 @@
 
             const response = await fetch('/v1/chat/completions', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: buildRequestHeaders(),
                 body: JSON.stringify({
                     model: 'gemini-enterprise',
                     messages: buildMessages(text),
@@ -489,8 +559,7 @@
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || '请求失败');
+                await handleErrorResponse(response);
             }
 
             const reader = response.body.getReader();
@@ -540,9 +609,7 @@
 
             const response = await fetch('/v1/chat/completions', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: buildRequestHeaders(),
                 body: JSON.stringify({
                     model: 'gemini-enterprise',
                     messages: buildMessages(text),
@@ -555,8 +622,7 @@
             removeTypingIndicator(loadingId);
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || '请求失败');
+                await handleErrorResponse(response);
             }
 
             const data = await response.json();
