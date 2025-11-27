@@ -917,10 +917,18 @@ def print_startup_info():
     print("启动服务...")
 
 
-if __name__ == '__main__':
+def run():
     print_startup_info()
     
     if not account_manager.accounts:
         print("[!] 警告: 没有配置任何账号")
     
-    app.run(host='0.0.0.0', port=8000, debug=False)
+    host = os.getenv("HOST", os.getenv("FLASK_RUN_HOST", "0.0.0.0"))
+    port = int(os.getenv("PORT", os.getenv("FLASK_RUN_PORT", "8000")))
+    debug = os.getenv("FLASK_DEBUG", "0") == "1"
+    
+    app.run(host=host, port=port, debug=debug)
+
+
+if __name__ == '__main__':
+    run()
