@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 import time
 import hmac
 import hashlib
@@ -32,6 +33,72 @@ GETOXSRF_URL = "https://business.gemini.google/auth/getoxsrf"
 # Flask应用
 app = Flask(__name__, static_folder='.')
 CORS(app)
+
+# 环境变量控制的鉴权配置
+ADMIN_AUTH_KEY = os.getenv("WEB_ADMIN_AUTH_KEY")
+ADMIN_AUTH_USER = os.getenv("WEB_ADMIN_AUTH_USER", "admin")
+ADMIN_AUTH_REALM = os.getenv("WEB_ADMIN_AUTH_REALM", "Business Gemini Admin")
+API_AUTH_KEY = os.getenv("API_AUTH_KEY")
+
+ADMIN_PROTECTED_PATHS = {'/', '/index.html', '/chat_history.html'}
+ADMIN_PROTECTED_PREFIXES = ('/api/',)
+
+
+def _is_admin_path(path: str) -> bool:
+    if path in ADMIN_PROTECTED_PATHS:
+        return True
+    return any(path.startswith(prefix) for prefix in ADMIN_PROTECTED_PREFIXES)
+
+
+def _admin_auth_required():
+    if not ADMIN_AUTH_KEY:
+        return None
+    auth = request.authorization
+    if auth:
+        username = auth.username or ""
+        password = auth.password or ""
+        username_valid = True
+        if ADMIN_AUTH_USER:
+            username_valid = hmac.compare_digest(username, ADMIN_AUTH_USER)
+        if username_valid and hmac.compare_digest(password, ADMIN_AUTH_KEY):
+            return None
+    return Response(
+        "Authentication required",
+        401,
+        {"WWW-Authenticate": f'Basic realm="{ADMIN_AUTH_REALM}"'}
+    )
+
+
+def _api_auth_required():
+    if not API_AUTH_KEY:
+        return None
+    provided_key = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        provided_key = auth_header[7:].strip()
+    if not provided_key:
+        provided_key = request.headers.get("X-API-Key")
+    if provided_key and hmac.compare_digest(provided_key, API_AUTH_KEY):
+        return None
+    return jsonify({
+        "error": "invalid_api_key",
+        "message": "Invalid or missing API key"
+    }), 401
+
+
+@app.before_request
+def enforce_authentication():
+    if request.method == 'OPTIONS':
+        return None
+    path = request.path or '/'
+    if ADMIN_AUTH_KEY and _is_admin_path(path):
+        response = _admin_auth_required()
+        if response is not None:
+            return response
+    if API_AUTH_KEY and path.startswith('/v1/'):
+        response = _api_auth_required()
+        if response is not None:
+            return response
 
 
 class AccountManager:

@@ -250,6 +250,33 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
   }'
 ```
 
+## 安全配置
+
+系统支持通过环境变量为 Web 管理控制台和 OpenAI 兼容 API 启用鉴权：
+
+### Web 管理控制台鉴权
+- `WEB_ADMIN_AUTH_KEY`：必填。设置后会自动启用 HTTP Basic Auth。
+- `WEB_ADMIN_AUTH_USER`：可选，默认值为 `admin`。
+- `WEB_ADMIN_AUTH_REALM`：可选，用于自定义 Basic Auth 提示框文案。
+
+当上述变量配置完成后，访问 `/`、`/index.html`、`/chat_history.html` 以及所有 `/api/*` 管理接口时，浏览器会弹出用户名/密码提示框。请输入 `WEB_ADMIN_AUTH_USER` 作为用户名、`WEB_ADMIN_AUTH_KEY` 作为密码即可登录。命令行访问示例如下：
+
+```bash
+WEB_ADMIN_AUTH_KEY=super-secret-key WEB_ADMIN_AUTH_USER=admin python gemini.py
+curl -u admin:super-secret-key http://127.0.0.1:8000/api/accounts
+```
+
+### API 调用鉴权
+- `API_AUTH_KEY`：设置后，所有 `/v1/*` 接口都必须携带 `Authorization: Bearer <API_AUTH_KEY>` 或 `X-API-Key: <API_AUTH_KEY>` 头部。
+
+```bash
+API_AUTH_KEY=my-api-key python gemini.py
+curl -H "Authorization: Bearer my-api-key" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"gemini-enterprise","messages":[{"role":"user","content":"hi"}]}' \
+     http://127.0.0.1:8000/v1/chat/completions
+```
+
 ## 注意事项
 
 1. **安全性**: 配置文件中包含敏感信息，请妥善保管，不要提交到公开仓库
