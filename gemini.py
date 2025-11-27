@@ -69,20 +69,67 @@ def _admin_auth_required():
     )
 
 
+def _extract_api_key_from_request():
+    """从请求中提取 API Key，支持多种传递方式"""
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        parts = auth_header.split(None, 1)
+        if not parts:
+            stripped = auth_header.strip()
+            if stripped:
+                return stripped
+        else:
+            scheme = parts[0].lower()
+            if len(parts) == 2 and scheme in {"bearer", "token", "apikey", "key"}:
+                token = parts[1].strip()
+                if token:
+                    return token
+            elif len(parts) == 1 and scheme not in {"basic", "bearer", "token", "apikey", "key"}:
+                stripped = auth_header.strip()
+                if stripped:
+                    return stripped
+
+    for header_name in ("X-API-Key", "X-Api-Key", "X-APIKEY"):
+        header_value = request.headers.get(header_name)
+        if header_value:
+            stripped = header_value.strip()
+            if stripped:
+                return stripped
+
+    for param in ("api_key", "apiKey", "key"):
+        value = request.args.get(param)
+        if value:
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        value = request.form.get(param)
+        if value:
+            stripped = value.strip()
+            if stripped:
+                return stripped
+
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if isinstance(data, dict):
+            for key_name in ("api_key", "apiKey", "key"):
+                value = data.get(key_name)
+                if value is not None:
+                    stripped = str(value).strip()
+                    if stripped:
+                        return stripped
+
+    return None
+
+
 def _api_auth_required():
     if not API_AUTH_KEY:
         return None
-    provided_key = None
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.lower().startswith("bearer "):
-        provided_key = auth_header[7:].strip()
-    if not provided_key:
-        provided_key = request.headers.get("X-API-Key")
+    provided_key = _extract_api_key_from_request()
     if provided_key and hmac.compare_digest(provided_key, API_AUTH_KEY):
         return None
     return jsonify({
         "error": "invalid_api_key",
-        "message": "Invalid or missing API key"
+        "message": "Invalid or missing API key. Provide it via Authorization header, X-API-Key header or api_key parameter."
     }), 401
 
 

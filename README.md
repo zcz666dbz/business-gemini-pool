@@ -267,7 +267,10 @@ curl -u admin:super-secret-key http://127.0.0.1:8000/api/accounts
 ```
 
 ### API 调用鉴权
-- `API_AUTH_KEY`：设置后，所有 `/v1/*` 接口都必须携带 `Authorization: Bearer <API_AUTH_KEY>` 或 `X-API-Key: <API_AUTH_KEY>` 头部。
+- `API_AUTH_KEY`：设置后，所有 `/v1/*` 接口都必须携带有效的 API Key。支持以下几种方式：
+  - `Authorization: Bearer <API_AUTH_KEY>`、`Authorization: ApiKey <API_AUTH_KEY>` 或 `Authorization: Token <API_AUTH_KEY>`
+  - 自定义头 `X-API-Key: <API_AUTH_KEY>`
+  - 查询参数、表单或 JSON 体中的 `api_key` 字段
 
 ```bash
 API_AUTH_KEY=my-api-key python gemini.py
